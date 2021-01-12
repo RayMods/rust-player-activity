@@ -5,18 +5,14 @@ using Oxide.Core.Configuration;
 using Oxide.Game.Rust.Libraries;
 
 namespace Oxide.Plugins {
-  [Info("Player Activity", "RayMods", "0.1.0")]
+  [Info("Player Activity", "RayMods", "0.1.1")]
   [Description("Tracks player connection activity details")]
   class PlayerActivity : RustPlugin {
     private const int AFK_TIMER = 60;
-    private const int SAVE_INTERVAL = 10; // seconds
+    private const int SAVE_INTERVAL = 10;
     private const int STATUS_CHECK_INTERVAL = 10;
 
     private DynamicConfigFile _playerData;
-
-    private Dictionary<string, SessionData> _newSessionData = new Dictionary<string, SessionData>();
-    private Dictionary<string, Timer> _sessionGenLoops = new Dictionary<string, Timer>();
-
     private Dictionary<string, SessionData> _playerSessions = new Dictionary<string, SessionData>();
     private Dictionary<string, ActivityData> _activityDataCache = new Dictionary<string, ActivityData>();
     private Dictionary<string, Timer> _playerTimers = new Dictionary<string, Timer>();
@@ -39,7 +35,7 @@ namespace Oxide.Plugins {
     }
 
     private void OnUserDisconnected(BasePlayer player) {
-      _newSessionData.Remove(player.UserIDString);
+      _playerSessions.Remove(player.UserIDString);
       _playerTimers[player.UserIDString].Destroy();
       _playerTimers.Remove(player.UserIDString);
     }
@@ -62,7 +58,7 @@ namespace Oxide.Plugins {
       SaveActivityData();
 
       _playerTimers.Clear();
-      _newSessionData.Clear();
+      _playerSessions.Clear();
       _activityDataCache.Clear();
     }
 
@@ -80,8 +76,8 @@ namespace Oxide.Plugins {
     }
 
     private void InitSession(BasePlayer player) {
-       if (!_newSessionData.ContainsKey(player.UserIDString)) {
-        _newSessionData.Add(player.UserIDString, new SessionData {
+       if (!_playerSessions.ContainsKey(player.UserIDString)) {
+        _playerSessions.Add(player.UserIDString, new SessionData {
           PlayTime = 0,
           IdleTime = 0,
           ConnectionTime = DateTime.UtcNow,
@@ -115,17 +111,17 @@ namespace Oxide.Plugins {
 
     private void UpdatePlayerSession(BasePlayer player) {
       bool isIdle = player.IdleTime > AFK_TIMER;
-      DateTime lastUpdate = _newSessionData[player.UserIDString].LastUpdateTime;
+      DateTime lastUpdate = _playerSessions[player.UserIDString].LastUpdateTime;
       double secondsSinceLastUpdate = DateTime.UtcNow.Subtract(lastUpdate).TotalSeconds;
 
       if (isIdle) {
         _activityDataCache[player.UserIDString].IdleTime += secondsSinceLastUpdate;
-        _newSessionData[player.UserIDString].IdleTime += secondsSinceLastUpdate;
+        _playerSessions[player.UserIDString].IdleTime += secondsSinceLastUpdate;
       } else {
         _activityDataCache[player.UserIDString].PlayTime += secondsSinceLastUpdate;
-        _newSessionData[player.UserIDString].PlayTime += secondsSinceLastUpdate;
+        _playerSessions[player.UserIDString].PlayTime += secondsSinceLastUpdate;
       }
-      _newSessionData[player.UserIDString].LastUpdateTime = DateTime.UtcNow;
+      _playerSessions[player.UserIDString].LastUpdateTime = DateTime.UtcNow;
     }
 
     #endregion
@@ -134,7 +130,7 @@ namespace Oxide.Plugins {
     #region API
 
     public Nullable<DateTime> GetFirstConnectionDate(string playerId) {
-      if (playerId != null && _activityDataCache.ContainsKey(playerId)) {
+      if (_activityDataCache.ContainsKey(playerId)) {
         return _activityDataCache[playerId].FirstConnection;
       }
       return null;
@@ -148,7 +144,7 @@ namespace Oxide.Plugins {
     }
 
     public Nullable<double> GetTotalPlayTime(string playerId) {
-      if (player != null && _activityDataCache.ContainsKey(playerId)) {
+      if (_activityDataCache.ContainsKey(playerId)) {
         return _activityDataCache[playerId].PlayTime;
       }
       return null;
@@ -162,29 +158,27 @@ namespace Oxide.Plugins {
     }
 
     public Nullable<double> GetSessionPlayTime(string playerId) {
-      if (_newSessionData.ContainsKey(playerId)) {
-        return _newSessionData[playerId].PlayTime;
+      if (_playerSessions.ContainsKey(playerId)) {
+        return _playerSessions[playerId].PlayTime;
       }
       return null;
     }
 
     public Nullable<double> GetSessionIdleTime(string playerId) {
-      if (_newSessionData.ContainsKey(playerId)) {
-        return _newSessionData[playerId].IdleTime;
+      if (_playerSessions.ContainsKey(playerId)) {
+        return _playerSessions[playerId].IdleTime;
       }
       return null;
     }
 
     public Nullable<DateTime> GetSessionStartTime(string playerId) {
-      if (_newSessionData.ContainsKey(playerId)) {
-        return _newSessionData[playerId].ConnectionTime;
+      if (_playerSessions.ContainsKey(playerId)) {
+        return _playerSessions[playerId].ConnectionTime;
       }
       return null;
     }
 
     #endregion
-
-    
 
 
     private class RawActivityData {
@@ -204,9 +198,5 @@ namespace Oxide.Plugins {
       public DateTime ConnectionTime;
       public DateTime LastUpdateTime;
     }
-
-
-    #region Utilities
-    #endregion
   }
 }
