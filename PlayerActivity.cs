@@ -5,12 +5,12 @@ using Oxide.Core.Configuration;
 using Oxide.Game.Rust.Libraries;
 
 namespace Oxide.Plugins {
-  [Info("Player Activity", "RayMods", "0.1.1")]
+  [Info("Player Activity", "RayMods", "0.1.2")]
   [Description("Tracks player connection activity details")]
   class PlayerActivity : RustPlugin {
     private const int AFK_TIMER = 60;
-    private const int SAVE_INTERVAL = 10;
-    private const int STATUS_CHECK_INTERVAL = 10;
+    private const int SAVE_INTERVAL = 300;
+    private const int STATUS_CHECK_INTERVAL = 60;
 
     private DynamicConfigFile _playerData;
     private Dictionary<string, SessionData> _playerSessions = new Dictionary<string, SessionData>();
@@ -129,49 +129,50 @@ namespace Oxide.Plugins {
 
     #region API
 
-    public Nullable<DateTime> GetFirstConnectionDate(string playerId) {
+    private Nullable<DateTime> GetFirstConnectionDate(string playerId) {
       if (_activityDataCache.ContainsKey(playerId)) {
         return _activityDataCache[playerId].FirstConnection;
       }
       return null;
     }
 
-    public Nullable<DateTime> GetLastConnectionDate(string playerId) {
+    private Nullable<DateTime> GetLastConnectionDate(string playerId) {
       if (_activityDataCache.ContainsKey(playerId)) {
         return _activityDataCache[playerId].LastConnection;
       };
       return null;
     }
 
-    public Nullable<double> GetTotalPlayTime(string playerId) {
+    private Nullable<double> GetTotalPlayTime(string playerId) {
+      Puts("PlayerActivity returning play time");
       if (_activityDataCache.ContainsKey(playerId)) {
         return _activityDataCache[playerId].PlayTime;
       }
       return null;
     }
 
-    public Nullable<double> GetTotalIdleTime(string playerId) {
+    private Nullable<double> GetTotalIdleTime(string playerId) {
       if (_activityDataCache.ContainsKey(playerId)) {
         return _activityDataCache[playerId].IdleTime;
       }
       return null;
     }
 
-    public Nullable<double> GetSessionPlayTime(string playerId) {
+    private Nullable<double> GetSessionPlayTime(string playerId) {
       if (_playerSessions.ContainsKey(playerId)) {
         return _playerSessions[playerId].PlayTime;
       }
       return null;
     }
 
-    public Nullable<double> GetSessionIdleTime(string playerId) {
+    private Nullable<double> GetSessionIdleTime(string playerId) {
       if (_playerSessions.ContainsKey(playerId)) {
         return _playerSessions[playerId].IdleTime;
       }
       return null;
     }
 
-    public Nullable<DateTime> GetSessionStartTime(string playerId) {
+    private Nullable<DateTime> GetSessionStartTime(string playerId) {
       if (_playerSessions.ContainsKey(playerId)) {
         return _playerSessions[playerId].ConnectionTime;
       }
@@ -182,7 +183,7 @@ namespace Oxide.Plugins {
 
 
     private class RawActivityData {
-      public Dictionary<string, ActivityData> PlayerActivityData;
+      public Dictionary<string, ActivityData> PlayerActivityData = new Dictionary<string, ActivityData>();
     }
 
     private class ActivityData {
