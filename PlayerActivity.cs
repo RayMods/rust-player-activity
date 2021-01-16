@@ -6,7 +6,7 @@ using Oxide.Game.Rust.Libraries;
 
 namespace Oxide.Plugins {
   [Info("Player Activity", "RayMods", "0.1.3")]
-  [Description("Tracks player connection activity details")]
+  [Description("Tracks player activity and AFK time.")]
   class PlayerActivity : RustPlugin {
     private const int AFK_TIMER = 60;
     private const int SAVE_INTERVAL = 300;
