@@ -5,7 +5,7 @@ using Oxide.Core.Configuration;
 using Oxide.Game.Rust.Libraries;
 
 namespace Oxide.Plugins {
-  [Info("Player Activity", "RayMods", "0.1.2")]
+  [Info("Player Activity", "RayMods", "0.1.3")]
   [Description("Tracks player connection activity details")]
   class PlayerActivity : RustPlugin {
     private const int AFK_TIMER = 60;
@@ -68,6 +68,7 @@ namespace Oxide.Plugins {
     #region DataMgmt
 
     private void InitPlayer(BasePlayer player) {
+      Puts($"init for player {player.displayName}");
       InitCache(player);
       InitSession(player);
 
@@ -110,7 +111,7 @@ namespace Oxide.Plugins {
     }
 
     private void UpdatePlayerSession(BasePlayer player) {
-      bool isIdle = player.IdleTime > AFK_TIMER;
+      bool isIdle = Player.IsConnected(player) && player.IdleTime > AFK_TIMER;
       DateTime lastUpdate = _playerSessions[player.UserIDString].LastUpdateTime;
       double secondsSinceLastUpdate = DateTime.UtcNow.Subtract(lastUpdate).TotalSeconds;
 
@@ -144,7 +145,6 @@ namespace Oxide.Plugins {
     }
 
     private Nullable<double> GetTotalPlayTime(string playerId) {
-      Puts("PlayerActivity returning play time");
       if (_activityDataCache.ContainsKey(playerId)) {
         return _activityDataCache[playerId].PlayTime;
       }
