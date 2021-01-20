@@ -6,7 +6,7 @@ using Oxide.Game.Rust.Libraries;
 using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins {
-  [Info("Player Activity", "RayMods", "0.3.0")]
+  [Info("Player Activity", "RayMods", "0.3.1")]
   [Description("Tracks player activity and AFK time.")]
   class PlayerActivity : CovalencePlugin {
     private Dictionary<string, ActivityData> _activityDataCache = new Dictionary<string, ActivityData>();
