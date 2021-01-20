@@ -3,17 +3,19 @@ using System.Collections.Generic;
 using Oxide.Core;
 using Oxide.Core.Configuration;
 using Oxide.Game.Rust.Libraries;
+using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins {
-  [Info("Player Activity", "RayMods", "0.2.0")]
+  [Info("Player Activity", "RayMods", "0.3.0")]
   [Description("Tracks player activity and AFK time.")]
-  class PlayerActivity : RustPlugin {
-    private DynamicConfigFile _playerData;
-    private Dictionary<string, SessionData> _playerSessions = new Dictionary<string, SessionData>();
+  class PlayerActivity : CovalencePlugin {
     private Dictionary<string, ActivityData> _activityDataCache = new Dictionary<string, ActivityData>();
+    private Dictionary<string, SessionData> _playerSessions = new Dictionary<string, SessionData>();
     private Dictionary<string, Timer> _playerTimers = new Dictionary<string, Timer>();
-    private Timer _saveTimer;
+    private Dictionary<string, PlayerLocation> _playerLoc = new Dictionary<string, PlayerLocation>();
+    private DynamicConfigFile _playerData;
     private PluginConfig _config;
+    private Timer _saveTimer;
 
 
     #region Hooks
@@ -27,20 +29,20 @@ namespace Oxide.Plugins {
       _saveTimer = timer.Repeat(_config.SAVE_INTERVAL, 0, SaveActivityData);
     }
     
-    private void OnUserConnected(BasePlayer player) {
+    private void OnUserConnected(IPlayer player) {
       InitPlayer(player);
-      _activityDataCache[player.UserIDString].LastConnection = DateTime.UtcNow;
+      _activityDataCache[player.Id].LastConnection = DateTime.UtcNow;
     }
 
-    private void OnUserDisconnected(BasePlayer player) {
-      _playerSessions.Remove(player.UserIDString);
-      _playerTimers[player.UserIDString].Destroy();
-      _playerTimers.Remove(player.UserIDString);
+    private void OnUserDisconnected(IPlayer player) {
+      _playerSessions.Remove(player.Id);
+      _playerTimers[player.Id].Destroy();
+      _playerTimers.Remove(player.Id);
     }
 
     private void Loaded() {
       BootstrapPlayerData();
-      foreach (BasePlayer player in Player.Players) {
+      foreach (IPlayer player in players.Connected) {
         InitPlayer(player);
       }
     }
@@ -50,7 +52,7 @@ namespace Oxide.Plugins {
       foreach (Timer playerTimer in _playerTimers.Values) {
         playerTimer.Destroy();
       }
-      foreach (BasePlayer player in Player.Players) {
+      foreach (IPlayer player in players.Connected) {
         UpdatePlayerSession(player);
       }
       SaveActivityData();
@@ -69,18 +71,17 @@ namespace Oxide.Plugins {
 
     #region DataMgmt
 
-    private void InitPlayer(BasePlayer player) {
-      Puts($"init for player {player.displayName}");
+    private void InitPlayer(IPlayer player) {
       InitCache(player);
       InitSession(player);
 
       Timer playerTimer = timer.Repeat(_config.STATUS_CHECK_INTERVAL, 0, () => UpdatePlayerSession(player));
-      _playerTimers.Add(player.UserIDString, playerTimer);
+      _playerTimers.Add(player.Id, playerTimer);
     }
 
-    private void InitSession(BasePlayer player) {
-       if (!_playerSessions.ContainsKey(player.UserIDString)) {
-        _playerSessions.Add(player.UserIDString, new SessionData {
+    private void InitSession(IPlayer player) {
+       if (!_playerSessions.ContainsKey(player.Id)) {
+        _playerSessions.Add(player.Id, new SessionData {
           PlayTime = 0,
           IdleTime = 0,
           ConnectionTime = DateTime.UtcNow,
@@ -89,9 +90,9 @@ namespace Oxide.Plugins {
       }
     }
 
-    private void InitCache(BasePlayer player) {
-      if (!_activityDataCache.ContainsKey(player.UserIDString)) {
-        _activityDataCache.Add(player.UserIDString, new ActivityData {
+    private void InitCache(IPlayer player) {
+      if (!_activityDataCache.ContainsKey(player.Id)) {
+        _activityDataCache.Add(player.Id, new ActivityData {
           FirstConnection = DateTime.UtcNow,
           IdleTime = 0,
           LastConnection = DateTime.UtcNow,
@@ -112,19 +113,43 @@ namespace Oxide.Plugins {
       _playerData.WriteObject(rawDataForSave);
     }
 
-    private void UpdatePlayerSession(BasePlayer player) {
-      bool isIdle = Player.IsConnected(player) && player.IdleTime > _config.AFK_TIMEOUT;
-      DateTime lastUpdate = _playerSessions[player.UserIDString].LastUpdateTime;
+    private bool IsAfk(IPlayer player) {
+      UpdatePosition(player);
+      double timeSinceMoved = DateTime.UtcNow.Subtract(_playerLoc[player.Id].LastMoved).TotalSeconds;
+      return timeSinceMoved > _config.AFK_TIMEOUT;
+    }
+
+    private void UpdatePosition(IPlayer player) {
+      if (!_playerLoc.ContainsKey(player.Id)) {
+        _playerLoc.Add(player.Id, new PlayerLocation {
+          Location = player.Position(),
+          LastMoved = DateTime.UtcNow
+        });
+      } else {
+        GenericPosition currentLoc = player.Position();
+        bool hasMoved = !currentLoc.Equals(_playerLoc[player.Id].Location);
+        if (hasMoved) {
+          _playerLoc[player.Id] = new PlayerLocation {
+            Location = player.Position(),
+            LastMoved = DateTime.UtcNow
+          };
+        }
+      }
+    }
+
+    private void UpdatePlayerSession(IPlayer player) {
+      bool isAfk = player.IsConnected && IsAfk(player);
+      DateTime lastUpdate = _playerSessions[player.Id].LastUpdateTime;
       double secondsSinceLastUpdate = DateTime.UtcNow.Subtract(lastUpdate).TotalSeconds;
 
-      if (isIdle) {
-        _activityDataCache[player.UserIDString].IdleTime += secondsSinceLastUpdate;
-        _playerSessions[player.UserIDString].IdleTime += secondsSinceLastUpdate;
+      if (isAfk) {
+        _activityDataCache[player.Id].IdleTime += secondsSinceLastUpdate;
+        _playerSessions[player.Id].IdleTime += secondsSinceLastUpdate;
       } else {
-        _activityDataCache[player.UserIDString].PlayTime += secondsSinceLastUpdate;
-        _playerSessions[player.UserIDString].PlayTime += secondsSinceLastUpdate;
+        _activityDataCache[player.Id].PlayTime += secondsSinceLastUpdate;
+        _playerSessions[player.Id].PlayTime += secondsSinceLastUpdate;
       }
-      _playerSessions[player.UserIDString].LastUpdateTime = DateTime.UtcNow;
+      _playerSessions[player.Id].LastUpdateTime = DateTime.UtcNow;
     }
 
     #endregion
@@ -181,6 +206,14 @@ namespace Oxide.Plugins {
       return null;
     }
 
+    private bool GetIsAfk(string playerId) {
+      IPlayer player = players.FindPlayerById(playerId);
+      if (player.IsConnected) {
+        return IsAfk(player);
+      }
+      return false;
+    }
+
     #endregion
 
 
@@ -219,6 +252,11 @@ namespace Oxide.Plugins {
       public double IdleTime;
       public DateTime ConnectionTime;
       public DateTime LastUpdateTime;
+    }
+
+    private class PlayerLocation {
+      public GenericPosition Location;
+      public DateTime LastMoved;
     }
   }
 }
