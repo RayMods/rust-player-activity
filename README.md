@@ -1,6 +1,6 @@
 # PlayerActivity
 
-**PlayerActivity** is a no-frills activity data provider which tracks play and idle time for players on a rust server.
+**PlayerActivity** is a no-frills activity data provider which tracks play and idle time for players on a Rust server. This plugin provides no UI, and is intended to be used as an API for other plugins which may need cached information about a player's activity on a server.
 
 ## Configuration
 
