@@ -6,8 +6,8 @@ using Oxide.Game.Rust.Libraries;
 using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins {
-  [Info("Player Activity", "RayMods", "0.3.1")]
-  [Description("Tracks player activity and AFK time.")]
+  [Info("Player Activity", "RayMods", "0.3.2")]
+  [Description("A plugin API for player's total and session play time, AFK time, and connection times.")]
   class PlayerActivity : CovalencePlugin {
     private Dictionary<string, ActivityData> _activityDataCache = new Dictionary<string, ActivityData>();
     private Dictionary<string, SessionData> _playerSessions = new Dictionary<string, SessionData>();
@@ -21,11 +21,11 @@ namespace Oxide.Plugins {
     #region Hooks
 
     private void Init() {
-      _config = Config.ReadObject<PluginConfig>();
       _playerData = Interface.Oxide.DataFileSystem.GetFile("PlayerActivity");
     }
 
     private void OnServerInitialized() {
+      Puts(_config.SAVE_INTERVAL.ToString());
       _saveTimer = timer.Repeat(_config.SAVE_INTERVAL, 0, SaveActivityData);
     }
     
@@ -60,6 +60,16 @@ namespace Oxide.Plugins {
       _playerTimers.Clear();
       _playerSessions.Clear();
       _activityDataCache.Clear();
+    }
+
+    protected override void LoadConfig() {
+      base.LoadConfig();
+      try {
+        _config = Config.ReadObject<PluginConfig>();
+      } catch {
+        PrintWarning("Configuration file is invalid, reverting to defaul.t");
+        LoadDefaultConfig();
+      }
     }
 
     protected override void LoadDefaultConfig() {
